@@ -1,1 +1,1596 @@
-<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>人工生命シミュレーター</title><style>body{margin:0;background:#101827;color:#e8eef7;font-family:sans-serif}#top{padding:10px;text-align:center}canvas{display:block;width:100%;max-width:720px;margin:auto;background:#0b1421;border:1px solid #34445b}#stats{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding:10px}span{background:#1b2738;padding:6px 10px;border-radius:8px}</style></head><body><div id="top"><h2>人工生命シミュレーター Evolution</h2></div><canvas id="world" width="720" height="480"></canvas><div id="stats"><span id="c"></span><span id="g"></span><span id="s"></span><span id="v"></span><span id="l"></span></div><script>const cv=world,ctx=cv.getContext('2d');const W=720,H=480;let foods=[],creatures=[],generation=1;const K='artificial_life_evo_v2';const rnd=(a,b)=>a+Math.random()*(b-a);function addFood(x=rnd(0,W),y=rnd(0,H)){foods.push({x,y})}function newCreature(x=rnd(0,W),y=rnd(0,H),energy=70,age=0,gen=1,speed=rnd(.8,2.2),view=rnd(70,130),life=rnd(120,220)){return{x,y,vx:rnd(-1,1),vy:rnd(-1,1),energy,age,gen,speed,view,life}}function reset(){foods=[];creatures=[];generation=1;for(let i=0;i<24;i++)creatures.push(newCreature());for(let i=0;i<120;i++)addFood();save()}function save(){localStorage.setItem(K,JSON.stringify({foods,creatures,generation,time:Date.now()}))}function load(){let r=localStorage.getItem(K);if(!r){reset();return;}let d=JSON.parse(r);foods=d.foods||[];creatures=d.creatures||[];generation=d.generation||1;let diff=Math.min((Date.now()-d.time)/1000,86400);while(diff>0){update(.5);diff-=.5}}function update(dt){if(Math.random()<0.08)addFood();for(let i=creatures.length-1;i>=0;i--){let c=creatures[i];c.age+=dt;c.energy-=dt*(0.6+c.speed*0.25);if(c.energy<=0||c.age>c.life){creatures.splice(i,1);continue;}let target=null,best=c.view*c.view;for(let f of foods){let dx=f.x-c.x,dy=f.y-c.y,d=dx*dx+dy*dy;if(d<best){best=d;target=f}}if(target){let dx=target.x-c.x,dy=target.y-c.y,m=Math.hypot(dx,dy)||1;c.vx+=dx/m*0.05*c.speed;c.vy+=dy/m*0.05*c.speed}else{c.vx+=rnd(-.08,.08);c.vy+=rnd(-.08,.08)}let vmax=c.speed;if(Math.hypot(c.vx,c.vy)>vmax){let m=Math.hypot(c.vx,c.vy);c.vx=c.vx/m*vmax;c.vy=c.vy/m*vmax}c.x+=c.vx*dt*2;c.y+=c.vy*dt*2;c.x=Math.max(0,Math.min(W,c.x));c.y=Math.max(0,Math.min(H,c.y));for(let j=foods.length-1;j>=0;j--){if((foods[j].x-c.x)**2+(foods[j].y-c.y)**2<100){c.energy+=25;foods.splice(j,1);break}}if(c.energy>120&&creatures.length<250){c.energy*=.5;let child=newCreature(c.x,c.y,c.energy,0,c.gen+1,Math.max(.4,c.speed+rnd(-.15,.15)),Math.max(30,c.view+rnd(-10,10)),Math.max(60,c.life+rnd(-15,15)));creatures.push(child);generation=Math.max(generation,child.gen)}}if(foods.length>600)foods.splice(0,foods.length-600)}function draw(){ctx.fillStyle='#0b1421';ctx.fillRect(0,0,W,H);ctx.fillStyle='#f6d365';foods.forEach(f=>ctx.fillRect(f.x,f.y,3,3));for(let c of creatures){ctx.fillStyle=c.speed>2?'#ff8080':c.view>120?'#80c0ff':'#78e0a0';ctx.beginPath();ctx.arc(c.x,c.y,3+c.energy/40,0,6.28);ctx.fill()}let avg=(k)=>creatures.length?(creatures.reduce((a,b)=>a+b[k],0)/creatures.length).toFixed(1):0;document.getElementById('c').textContent='生物:'+creatures.length;document.getElementById('g').textContent='世代:'+generation;document.getElementById('s').textContent='平均速度:'+avg('speed');document.getElementById('v').textContent='平均視野:'+avg('view');document.getElementById('l').textContent='平均寿命:'+avg('life')}let last=0;function loop(t){let dt=Math.min(.05,(t-last)/1000||.05);last=t;update(dt);draw();if(Math.random()<0.03)save();requestAnimationFrame(loop)}load();window.addEventListener('pagehide',save);document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});requestAnimationFrame(loop);</script></body></html>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1,
+               maximum-scale=1,
+               user-scalable=no">
+
+<meta name="theme-color" content="#101827">
+
+<title>人工生命シミュレーター Evolution</title>
+
+<style>
+
+:root{
+    color-scheme:dark;
+
+    --bg:#101827;
+    --panel:#1b2738;
+    --line:#34445b;
+    --text:#e8eef7;
+    --muted:#9aabc1;
+
+    --food:#f6d365;
+
+    --fast:#ff7070;
+    --vision:#70a8ff;
+    --life:#70ff9d;
+}
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:
+      system-ui,
+      -apple-system,
+      "Hiragino Kaku Gothic ProN",
+      Meiryo,
+      sans-serif;
+}
+
+main{
+    width:min(100%,760px);
+    margin:auto;
+    padding:14px;
+}
+
+header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:12px;
+}
+
+h1{
+    margin:0;
+    font-size:20px;
+}
+
+.sub{
+    color:var(--muted);
+    font-size:11px;
+    margin-top:4px;
+}
+
+.pill{
+    color:#7de3ad;
+    border:1px solid #356750;
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:11px;
+}
+
+#worldWrap{
+    position:relative;
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+    background:#09111d;
+}
+
+canvas{
+    display:block;
+    width:100%;
+    height:auto;
+}
+
+.overlay{
+    position:absolute;
+    left:10px;
+    top:10px;
+
+    background:#101827cc;
+
+    padding:6px 9px;
+
+    border-radius:8px;
+
+    font-size:11px;
+}
+
+.stats{
+    margin-top:10px;
+
+    display:grid;
+
+    grid-template-columns:
+      repeat(4,1fr);
+
+    gap:8px;
+}
+
+.stat{
+    background:var(--panel);
+
+    border:1px solid var(--line);
+
+    border-radius:10px;
+
+    padding:8px;
+}
+
+.stat span{
+    font-size:10px;
+    color:var(--muted);
+    display:block;
+}
+
+.stat strong{
+    display:block;
+    font-size:18px;
+    margin-top:2px;
+}
+
+.controls{
+    margin-top:10px;
+
+    background:var(--panel);
+
+    border:1px solid var(--line);
+
+    border-radius:12px;
+
+    padding:12px;
+}
+
+.buttons{
+    display:grid;
+
+    grid-template-columns:
+      1fr 1fr 1fr;
+
+    gap:8px;
+}
+
+button{
+    min-height:42px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:#2b3b51;
+
+    color:white;
+
+    font-weight:600;
+}
+
+button.primary{
+    background:#236b4b;
+}
+
+.settings{
+    margin-top:12px;
+
+    display:grid;
+
+    grid-template-columns:
+      1fr 1fr;
+
+    gap:14px;
+}
+
+.setting label{
+    display:flex;
+    justify-content:space-between;
+
+    font-size:12px;
+    margin-bottom:6px;
+}
+
+.setting output{
+    color:#7de3ad;
+}
+
+input[type=range]{
+    width:100%;
+}
+
+.legend{
+    display:flex;
+    flex-wrap:wrap;
+
+    gap:12px;
+
+    margin-top:10px;
+
+    font-size:11px;
+
+    color:var(--muted);
+}
+
+.dot{
+    display:inline-block;
+
+    width:8px;
+    height:8px;
+
+    border-radius:50%;
+    margin-right:4px;
+}
+
+.help{
+    margin-top:10px;
+
+    color:var(--muted);
+
+    font-size:11px;
+
+    line-height:1.6;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<main>
+
+<header>
+
+<div>
+
+<h1>人工生命シミュレーター</h1>
+
+<div class="sub">
+進化する人工生命を観察する箱庭
+</div>
+
+</div>
+
+<div class="pill">
+LIVE ECOSYSTEM
+</div>
+
+</header>
+
+<div id="worldWrap">
+
+<canvas
+ id="world"
+ width="720"
+ height="480">
+</canvas>
+
+<div class="overlay">
+タップで餌を追加
+</div>
+
+</div>
+
+<section class="stats">
+
+<div class="stat">
+<span>生物</span>
+<strong id="creatureCount">0</strong>
+</div>
+
+<div class="stat">
+<span>餌</span>
+<strong id="foodCount">0</strong>
+</div>
+
+<div class="stat">
+<span>世代</span>
+<strong id="generation">1</strong>
+</div>
+
+<div class="stat">
+<span>経過時間</span>
+<strong id="elapsed">0秒</strong>
+</div>
+
+<div class="stat">
+<span>平均速度</span>
+<strong id="avgSpeed">0</strong>
+</div>
+
+<div class="stat">
+<span>平均視野</span>
+<strong id="avgView">0</strong>
+</div>
+
+<div class="stat">
+<span>平均寿命</span>
+<strong id="avgLife">0</strong>
+</div>
+
+<div class="stat">
+<span>種族傾向</span>
+<strong id="speciesInfo">-</strong>
+</div>
+
+</section>
+
+<section class="controls">
+
+<div class="buttons">
+
+<button
+ class="primary"
+ id="toggle">
+⏸ 一時停止
+</button>
+
+<button
+ id="addFood">
+＋ 餌追加
+</button>
+
+<button
+ id="reset">
+↻ リセット
+</button>
+
+</div>
+
+<div class="settings">
+
+<div class="setting">
+<label>
+シミュレーション速度
+<output id="speedVal">1.0倍</output>
+</label>
+<input
+ id="speed"
+ type="range"
+ min=".25"
+ max="3"
+ step=".25"
+ value="1">
+</div>
+
+<div class="setting">
+<label>
+餌の発生量
+<output id="foodVal">標準</output>
+</label>
+<input
+ id="foodRate"
+ type="range"
+ min="0"
+ max="3"
+ value="1">
+</div>
+
+<div class="setting">
+<label>
+繁殖しやすさ
+<output id="birthVal">標準</output>
+</label>
+<input
+ id="birth"
+ type="range"
+ min=".5"
+ max="2"
+ step=".25"
+ value="1">
+</div>
+
+<div class="setting">
+<label>
+寿命倍率
+<output id="lifeVal">標準</output>
+</label>
+<input
+ id="life"
+ type="range"
+ min=".6"
+ max="1.8"
+ step=".2"
+ value="1">
+</div>
+
+</div>
+
+</section>
+
+<div class="legend">
+
+<span>
+<i class="dot"
+style="background:#ff7070"></i>
+高速種
+</span>
+
+<span>
+<i class="dot"
+style="background:#70a8ff"></i>
+広視野種
+</span>
+
+<span>
+<i class="dot"
+style="background:#70ff9d"></i>
+長寿種
+</span>
+
+<span>
+<i class="dot"
+style="background:#f6d365"></i>
+餌
+</span>
+
+</div>
+
+<p class="help">
+
+生物は速度・視野・寿命を遺伝し、
+繁殖時に突然変異します。
+環境に適応した種族が生き残ります。
+
+</p>
+
+<script>
+const canvas =
+document.getElementById('world');
+
+const ctx =
+canvas.getContext('2d');
+
+const W = 720;
+const H = 480;
+
+const $ = id =>
+document.getElementById(id);
+
+const SAVE_KEY =
+"life_evolution_v3";
+
+let creatures = [];
+let foods = [];
+
+let running = true;
+
+let elapsed = 0;
+
+let generation = 1;
+
+let lastTime = 0;
+
+let foodClock = 0;
+
+let speed = 1;
+let foodRate = 1;
+let birthRate = 1;
+let lifeRate = 1;
+
+const rand = (a,b)=>
+a + Math.random() * (b-a);
+
+function clamp(v,min,max){
+    return Math.max(
+        min,
+        Math.min(max,v)
+    );
+}
+
+function newCreature(
+    x = rand(20,W-20),
+    y = rand(20,H-20),
+
+    energy = rand(45,75),
+
+    age = 0,
+
+    gen = 1,
+
+    dna = null
+){
+
+    if(!dna){
+
+        dna = {
+
+            speed :
+                rand(0.8,2.2),
+
+            view :
+                rand(70,140),
+
+            life :
+                rand(120,240)
+
+        };
+
+    }
+
+    return {
+
+        x,
+        y,
+
+        vx:rand(-1,1),
+        vy:rand(-1,1),
+
+        energy,
+
+        age,
+
+        gen,
+
+        dna,
+
+        pulse:
+            rand(0,100)
+
+    };
+}
+
+function addFood(
+    x = rand(10,W-10),
+    y = rand(10,H-10)
+){
+
+    foods.push({
+
+        x,
+        y,
+
+        r:
+            rand(2.5,4),
+
+        pulse:
+            rand(0,10)
+
+    });
+
+}
+
+function resetWorld(){
+
+    creatures = [];
+    foods = [];
+
+    elapsed = 0;
+    generation = 1;
+    foodClock = 0;
+
+    for(let i=0;i<24;i++){
+
+        creatures.push(
+            newCreature()
+        );
+
+    }
+
+    for(let i=0;i<120;i++){
+
+        addFood();
+
+    }
+
+    saveState();
+}
+
+function getSpeciesType(c){
+
+    const d = c.dna;
+
+    if(
+        d.speed >
+        1.9
+    ){
+        return "fast";
+    }
+
+    if(
+        d.view >
+        120
+    ){
+        return "vision";
+    }
+
+    return "life";
+}
+
+function getSpeciesColor(c){
+
+    const t =
+    getSpeciesType(c);
+
+    if(t==="fast")
+        return "#ff7070";
+
+    if(t==="vision")
+        return "#70a8ff";
+
+    return "#70ff9d";
+}
+
+function saveState(){
+
+    const save = {
+
+        savedTime:
+            Date.now(),
+
+        creatures,
+
+        foods,
+
+        elapsed,
+
+        generation,
+
+        speed,
+        foodRate,
+        birthRate,
+        lifeRate
+    };
+
+    localStorage.setItem(
+        SAVE_KEY,
+        JSON.stringify(save)
+    );
+}
+
+function loadState(){
+
+    const raw =
+    localStorage.getItem(
+        SAVE_KEY
+    );
+
+    if(!raw){
+
+        resetWorld();
+        return;
+
+    }
+
+    try{
+
+        const data =
+        JSON.parse(raw);
+
+        creatures =
+            data.creatures || [];
+
+        foods =
+            data.foods || [];
+
+        elapsed =
+            data.elapsed || 0;
+
+        generation =
+            data.generation || 1;
+
+        speed =
+            data.speed || 1;
+
+        foodRate =
+            data.foodRate || 1;
+
+        birthRate =
+            data.birthRate || 1;
+
+        lifeRate =
+            data.lifeRate || 1;
+
+        const offlineSeconds =
+        Math.min(
+            (
+                Date.now()
+                -
+                data.savedTime
+            )/1000,
+            86400
+        );
+
+        catchUp(
+            offlineSeconds
+        );
+
+    }
+    catch(e){
+
+        resetWorld();
+
+    }
+}
+
+function catchUp(seconds){
+
+    let remain =
+    seconds;
+
+    while(remain > 0){
+
+        update(
+            Math.min(
+                remain,
+                0.5
+            )
+        );
+
+        remain -= 0.5;
+
+        if(
+            creatures.length===0
+        ){
+
+            for(
+                let i=0;
+                i<15;
+                i++
+            ){
+
+                creatures.push(
+                    newCreature()
+                );
+
+            }
+
+        }
+
+    }
+
+}
+function update(dt){
+
+    const step =
+    dt * speed;
+
+    elapsed += step;
+
+    foodClock += step;
+
+    const spawnInterval =
+        foodRate === 0
+        ? Infinity
+        : Math.max(
+            0.25,
+            1.5 / foodRate
+          );
+
+    while(
+        foodClock >
+        spawnInterval
+    ){
+
+        foodClock -=
+            spawnInterval;
+
+        addFood();
+    }
+
+    for(
+        let f of foods
+    ){
+
+        f.pulse += step;
+
+    }
+
+    for(
+        let i =
+        creatures.length-1;
+        i>=0;
+        i--
+    ){
+
+        const c =
+        creatures[i];
+
+        c.age += step;
+
+        c.pulse += step;
+
+        const speedCost =
+        c.dna.speed * 0.35;
+
+        c.energy -=
+            step *
+            (
+                0.60 +
+                speedCost
+            );
+
+        const lifeLimit =
+            c.dna.life
+            *
+            lifeRate;
+
+        if(
+            c.energy <= 0
+            ||
+            c.age > lifeLimit
+        ){
+
+            creatures.splice(
+                i,
+                1
+            );
+
+            continue;
+        }
+
+        let target =
+            null;
+
+        let best =
+            c.dna.view
+            *
+            c.dna.view;
+
+        for(
+            let j=0;
+            j<foods.length;
+            j++
+        ){
+
+            const f =
+            foods[j];
+
+            const dx =
+            f.x-c.x;
+
+            const dy =
+            f.y-c.y;
+
+            const d =
+            dx*dx +
+            dy*dy;
+
+            if(
+                d < best
+            ){
+
+                best = d;
+                target = f;
+
+            }
+
+        }
+
+        if(target){
+
+            const dx =
+            target.x-c.x;
+
+            const dy =
+            target.y-c.y;
+
+            const dist =
+            Math.hypot(
+                dx,
+                dy
+            ) || 1;
+
+            c.vx +=
+                dx/dist *
+                0.07;
+
+            c.vy +=
+                dy/dist *
+                0.07;
+
+        }else{
+
+            c.vx +=
+            rand(
+                -.12,
+                 .12
+            );
+
+            c.vy +=
+            rand(
+                -.12,
+                 .12
+            );
+
+        }
+
+        const vmax =
+            c.dna.speed;
+
+        const vel =
+            Math.hypot(
+                c.vx,
+                c.vy
+            );
+
+        if(
+            vel > vmax
+        ){
+
+            c.vx =
+            c.vx/vel*vmax;
+
+            c.vy =
+            c.vy/vel*vmax;
+        }
+
+        c.x +=
+            c.vx *
+            step *
+            2.2;
+
+        c.y +=
+            c.vy *
+            step *
+            2.2;
+
+        if(
+            c.x < 7
+            ||
+            c.x > W-7
+        ){
+
+            c.vx *= -1;
+
+        }
+
+        if(
+            c.y < 7
+            ||
+            c.y > H-7
+        ){
+
+            c.vy *= -1;
+
+        }
+
+        c.x =
+            clamp(
+                c.x,
+                7,
+                W-7
+            );
+
+        c.y =
+            clamp(
+                c.y,
+                7,
+                H-7
+            );
+
+        for(
+            let j=
+            foods.length-1;
+            j>=0;
+            j--
+        ){
+
+            const f =
+            foods[j];
+
+            const dx =
+                c.x-f.x;
+
+            const dy =
+                c.y-f.y;
+
+            const d =
+                dx*dx+
+                dy*dy;
+
+            if(
+                d < 100
+            ){
+
+                c.energy =
+                Math.min(
+                    180,
+                    c.energy+25
+                );
+
+                foods.splice(
+                    j,
+                    1
+                );
+
+                break;
+            }
+        }
+
+        if(
+            c.energy >
+            (
+                115 /
+                birthRate
+            )
+            &&
+            creatures.length <
+            250
+        ){
+
+            c.energy *=
+                0.5;
+
+            const childDNA = {
+
+                speed:
+                    clamp(
+                        c.dna.speed
+                        +
+                        rand(
+                            -0.15,
+                             0.15
+                        ),
+                        0.5,
+                        3.2
+                    ),
+
+                view:
+                    clamp(
+                        c.dna.view
+                        +
+                        rand(
+                            -10,
+                            10
+                        ),
+                        40,
+                        200
+                    ),
+
+                life:
+                    clamp(
+                        c.dna.life
+                        +
+                        rand(
+                            -15,
+                             15
+                        ),
+                        60,
+                        400
+                    )
+
+            };
+
+            const child =
+            newCreature(
+
+                c.x+
+                rand(
+                    -10,
+                     10
+                ),
+
+                c.y+
+                rand(
+                    -10,
+                     10
+                ),
+
+                c.energy,
+
+                0,
+
+                c.gen+1,
+
+                childDNA
+            );
+
+            creatures.push(
+                child
+            );
+
+            generation =
+            Math.max(
+                generation,
+                child.gen
+            );
+        }
+
+    }
+
+    if(
+        foods.length >
+        600
+    ){
+
+        foods.splice(
+            0,
+            foods.length-600
+        );
+
+    }
+
+}
+function draw(){
+
+    ctx.clearRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+    ctx.fillStyle =
+        "#0b1421";
+
+    ctx.fillRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+    ctx.strokeStyle =
+        "rgba(120,150,180,.05)";
+
+    for(
+        let x=0;
+        x<W;
+        x+=40
+    ){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            x,
+            0
+        );
+
+        ctx.lineTo(
+            x,
+            H
+        );
+
+        ctx.stroke();
+
+    }
+
+    for(
+        let y=0;
+        y<H;
+        y+=40
+    ){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            0,
+            y
+        );
+
+        ctx.lineTo(
+            W,
+            y
+        );
+
+        ctx.stroke();
+
+    }
+
+    for(
+        const f
+        of foods
+    ){
+
+        ctx.beginPath();
+
+        ctx.arc(
+            f.x,
+            f.y,
+            f.r +
+            Math.sin(
+                f.pulse
+            ) * 0.4,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+            "#f6d365";
+
+        ctx.shadowBlur =
+            8;
+
+        ctx.shadowColor =
+            "#f6d365";
+
+        ctx.fill();
+
+    }
+
+    ctx.shadowBlur =
+        0;
+
+    for(
+        const c
+        of creatures
+    ){
+
+        const r =
+            3 +
+            c.energy/35;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            c.x,
+            c.y,
+            r,
+            0,
+            Math.PI*2
+        );
+
+        const color =
+        getSpeciesColor(c);
+
+        ctx.fillStyle =
+            color;
+
+        ctx.shadowColor =
+            color;
+
+        ctx.shadowBlur =
+            7;
+
+        ctx.fill();
+
+        ctx.shadowBlur =
+            0;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            c.x +
+            c.vx * 2,
+            c.y +
+            c.vy * 2,
+            1.3,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+            "#ffffff";
+
+        ctx.fill();
+    }
+}
+
+function updateStats(){
+
+    const count =
+        creatures.length;
+
+    let avgSpeed=0;
+    let avgView=0;
+    let avgLife=0;
+
+    let fast=0;
+    let vision=0;
+    let life=0;
+
+    for(
+        const c
+        of creatures
+    ){
+
+        avgSpeed +=
+            c.dna.speed;
+
+        avgView +=
+            c.dna.view;
+
+        avgLife +=
+            c.dna.life;
+
+        const type =
+            getSpeciesType(
+                c
+            );
+
+        if(type==="fast")
+            fast++;
+
+        else if(
+            type==="vision"
+        )
+            vision++;
+
+        else
+            life++;
+
+    }
+
+    if(count>0){
+
+        avgSpeed /= count;
+        avgView /= count;
+        avgLife /= count;
+
+    }
+
+    $("creatureCount")
+    .textContent =
+        count;
+
+    $("foodCount")
+    .textContent =
+        foods.length;
+
+    $("generation")
+    .textContent =
+        generation;
+
+    $("elapsed")
+    .textContent =
+        Math.floor(
+            elapsed
+        ) + "秒";
+
+    $("avgSpeed")
+    .textContent =
+        avgSpeed
+        .toFixed(1);
+
+    $("avgView")
+    .textContent =
+        avgView
+        .toFixed(0);
+
+    $("avgLife")
+    .textContent =
+        avgLife
+        .toFixed(0);
+
+    let major =
+        "長寿";
+
+    if(
+        fast>=vision
+        &&
+        fast>=life
+    ){
+        major="高速";
+    }
+    else if(
+        vision>=life
+    ){
+        major="広視野";
+    }
+
+    $("speciesInfo")
+    .textContent =
+        major;
+}
+
+function frame(t){
+
+    let dt =
+        Math.min(
+            0.05,
+            (
+                t -
+                lastTime
+            ) / 1000
+            ||
+            0
+        );
+
+    lastTime =
+        t;
+
+    if(
+        running
+    ){
+
+        update(dt);
+
+        if(
+            Math.random()
+            < 0.03
+        ){
+
+            saveState();
+
+        }
+
+    }
+
+    draw();
+
+    updateStats();
+
+    requestAnimationFrame(
+        frame
+    );
+}
+
+$("toggle")
+.onclick=()=>{
+
+    running =
+        !running;
+
+    $("toggle")
+    .textContent =
+        running
+        ?
+        "⏸ 一時停止"
+        :
+        "▶ 再開";
+
+};
+
+$("addFood")
+.onclick=()=>{
+
+    for(
+        let i=0;
+        i<40;
+        i++
+    ){
+
+        addFood();
+
+    }
+
+};
+
+$("reset")
+.onclick=()=>{
+
+    resetWorld();
+
+};
+
+$("speed")
+.oninput=e=>{
+
+    speed =
+        +e.target.value;
+
+    $("speedVal")
+    .textContent =
+        speed.toFixed(1)
+        +
+        "倍";
+
+};
+
+$("foodRate")
+.oninput=e=>{
+
+    foodRate =
+        +e.target.value;
+
+    const txt =
+    [
+        "なし",
+        "少",
+        "標準",
+        "多"
+    ];
+
+    $("foodVal")
+    .textContent =
+        txt[
+           foodRate
+        ];
+
+};
+
+$("birth")
+.oninput=e=>{
+
+    birthRate =
+        +e.target.value;
+
+    $("birthVal")
+    .textContent =
+        birthRate
+        .toFixed(2);
+
+};
+
+$("life")
+.oninput=e=>{
+
+    lifeRate =
+        +e.target.value;
+
+    $("lifeVal")
+    .textContent =
+        lifeRate
+        .toFixed(1);
+
+};
+
+canvas
+.addEventListener(
+"pointerdown",
+e=>{
+
+    const rect =
+        canvas
+        .getBoundingClientRect();
+
+    const x =
+        (
+            e.clientX -
+            rect.left
+        )
+        /
+        rect.width
+        *
+        W;
+
+    const y =
+        (
+            e.clientY -
+            rect.top
+        )
+        /
+        rect.height
+        *
+        H;
+
+    for(
+        let i=0;
+        i<15;
+        i++
+    ){
+
+        addFood(
+            x +
+            rand(-25,25),
+
+            y +
+            rand(-25,25)
+        );
+
+    }
+
+}
+);
+
+window
+.addEventListener(
+"pagehide",
+saveState
+);
+
+document
+.addEventListener(
+"visibilitychange",
+()=>{
+
+    if(
+        document.hidden
+    ){
+
+        saveState();
+
+    }
+
+}
+);
+
+loadState();
+
+requestAnimationFrame(
+    frame
+);
+
+})();
+</script>
+
+</body>
+</html>
